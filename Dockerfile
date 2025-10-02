@@ -1,43 +1,40 @@
-# Base image: Node 20 LTS
+# Use official Node LTS
 FROM node:20-slim
 
-# Install Python, FFmpeg and required dependencies for yt-dlp
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    ffmpeg \
-    wget \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create symbolic link for python command
-RUN ln -s /usr/bin/python3 /usr/bin/python
-
-# Install yt-dlp using the official method (more reliable than pip)
-RUN wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O /usr/local/bin/yt-dlp
-RUN chmod a+rx /usr/local/bin/yt-dlp
-
-# Optional: update npm to latest for better dependency resolution
-RUN npm install -g npm@11.6.1
-
-# Set working directory
+# Set working dir
 WORKDIR /usr/src/app
 
-# Copy package files first for caching
-COPY package*.json ./
+# Use noninteractive for apt
+ENV DEBIAN_FRONTEND=noninteractive
+ENV NODE_ENV=production
 
-# Install dependencies
-RUN npm install --prefer-offline --no-audit --progress=false
+# Install system deps: curl, ca-certificates, ffmpeg (yt-dlp needs ffmpeg for some formats)
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    python3 \
+    ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
 
-# Copy project files
+# Copy package manifest(s) and install deps
+COPY package.json package-lock.json* ./
+# For dev builds you can replace `--only=production` with full install
+RUN npm ci --only=production
+
+# Copy rest of the app
 COPY . .
 
-# Environment variables
-ENV NODE_ENV=production
-ENV NODE_YT_COOKIES=""
+# Create bin folder and download yt-dlp binary (latest release)
+RUN mkdir -p ./bin \
+  && curl -L -o ./bin/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp" \
+  && chmod +x ./bin/yt-dlp
 
-# Create temp folder for cookies
-RUN mkdir -p /tmp/cookies
+# Ensure node_modules/.bin/ffmpeg-static can be used (optional)
+# If you prefer system ffmpeg, ffmpeg-static isn't necessary. Keeping both is safe.
 
-# Run the bot
+# Expose the port your server listens on (server.js uses process.env.PORT || 3000)
+EXPOSE 3000
+
+# Default command
 CMD ["node", "index.js"]
