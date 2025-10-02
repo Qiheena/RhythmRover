@@ -4,10 +4,10 @@ FROM node:20-slim
 # Set working directory
 WORKDIR /usr/src/app
 
-# Copy package files first to leverage caching
+# Copy package files first to leverage Docker caching
 COPY package*.json ./
 
-# Install dependencies (cache friendly, works even without package-lock.json)
+# Install dependencies (works with or without package-lock.json)
 RUN npm install --prefer-offline --no-audit --progress=false
 
 # Copy all project files
