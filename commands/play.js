@@ -46,7 +46,7 @@ async function playNext(guildId, client) {
 module.exports = {
     name: 'play',
     aliases: ['p'],
-    description: 'Play a song from Spotify, YouTube, or SoundCloud',
+    description: 'Play a song from YouTube or SoundCloud, or search by song name',
     async execute(message, args, client) {
         const voiceChannel = message.member?.voice?.channel;
         if (!voiceChannel) {
@@ -66,13 +66,7 @@ module.exports = {
             if (play.yt_validate(query) === 'video') {
                 songInfo = await play.video_info(query);
             } else if (play.sp_validate(query)) {
-                const spotifyData = await play.spotify(query);
-                if (spotifyData.type === 'track') {
-                    const searchResults = await play.search(`${spotifyData.name} ${spotifyData.artists[0].name}`, { limit: 1 });
-                    if (searchResults.length > 0) {
-                        songInfo = await play.video_info(searchResults[0].url);
-                    }
-                }
+                return searchMsg.edit('❌ Spotify links are not supported!\nPlease use:\n• YouTube links\n• Song names (e.g., "Bohemian Rhapsody Queen")\n• SoundCloud links');
             } else if (play.so_validate(query)) {
                 songInfo = await play.soundcloud(query);
             } else {
