@@ -63,7 +63,7 @@ module.exports = {
         try {
             let songInfo;
             
-            if (play.sp_validate(query)) {
+            if (play.sp_validate(query) && (query.includes('spotify.com') || query.includes('spotify:'))) {
                 const spotifyData = await play.spotify(query);
                 if (spotifyData.type === 'track') {
                     const searchQuery = `${spotifyData.name} ${spotifyData.artists.map(a => a.name).join(' ')}`;
