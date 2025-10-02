@@ -1,3 +1,5 @@
+//GitHub Copilot Chat Assistant
+
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, StreamType } = require('@discordjs/voice');
 const play = require('play-dl');
 const fs = require('fs');
