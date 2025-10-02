@@ -6,20 +6,6 @@ const path = require('path');
 const config = require('./settings/config');
 require('dotenv').config();
 
-if (process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET) {
-    play.setToken({
-        spotify: {
-            client_id: process.env.SPOTIFY_CLIENT_ID,
-            client_secret: process.env.SPOTIFY_CLIENT_SECRET,
-            refresh_token: process.env.SPOTIFY_REFRESH_TOKEN,
-            market: 'US'
-        }
-    });
-    console.log('✅ Spotify authentication configured');
-} else {
-    console.log('⚠️ Spotify credentials not found - Spotify links will not work');
-}
-
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,

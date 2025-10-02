@@ -46,7 +46,7 @@ async function playNext(guildId, client) {
 module.exports = {
     name: 'play',
     aliases: ['p'],
-    description: 'Play a song by name (e.g., Shape of You Ed Sheeran)',
+    description: 'Play songs from SoundCloud - use song names or SoundCloud links',
     async execute(message, args, client) {
         const voiceChannel = message.member?.voice?.channel;
         if (!voiceChannel) {
@@ -62,37 +62,35 @@ module.exports = {
 
         try {
             let songInfo;
+            let songTitle = 'Unknown';
+            let songUrl = query;
             
-            if (play.sp_validate(query) && (query.includes('spotify.com') || query.includes('spotify:'))) {
-                try {
-                    const spotifyData = await play.spotify(query);
-                    if (spotifyData.type === 'track') {
-                        const searchQuery = `${spotifyData.name} ${spotifyData.artists.map(a => a.name).join(' ')}`;
-                        const searchResults = await play.search(searchQuery, { limit: 1, source: { youtube: 'video' } });
-                        if (searchResults.length > 0) {
-                            songInfo = await play.video_info(searchResults[0].url);
-                        }
-                    }
-                } catch (spotifyError) {
-                    console.error('Spotify error, falling back to search:', spotifyError.message);
-                    return searchMsg.edit('❌ Spotify links are not supported right now.\nPlease use song names like: `!play Shape of You Ed Sheeran`');
+            if (query.includes('soundcloud.com')) {
+                if (play.so_validate(query)) {
+                    songInfo = await play.soundcloud(query);
+                    songTitle = songInfo.name || songInfo.title || 'Unknown';
+                    songUrl = songInfo.url;
+                } else {
+                    return searchMsg.edit('❌ Invalid SoundCloud link!');
                 }
-            } else if (query.includes('soundcloud.com')) {
-                return searchMsg.edit('❌ SoundCloud links are not supported right now.\nPlease use song names like: `!play Shape of You Ed Sheeran`');
             } else {
-                const searchResults = await play.search(query, { limit: 1, source: { youtube: 'video' } });
+                const searchResults = await play.search(query, { 
+                    limit: 1, 
+                    source: { soundcloud: 'tracks' }
+                });
+                
                 if (searchResults.length > 0) {
-                    songInfo = await play.video_info(searchResults[0].url);
+                    const track = searchResults[0];
+                    songTitle = track.name || track.title || 'Unknown';
+                    songUrl = track.url;
+                } else {
+                    return searchMsg.edit('❌ No results found on SoundCloud! Try a different search.');
                 }
-            }
-
-            if (!songInfo) {
-                return searchMsg.edit('❌ No results found! Try a different search.');
             }
 
             const song = {
-                title: songInfo.video_details?.title || 'Unknown',
-                url: songInfo.video_details?.url || query
+                title: songTitle,
+                url: songUrl
             };
 
             let serverQueue = client.queues.get(message.guild.id);
