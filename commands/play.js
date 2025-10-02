@@ -13,19 +13,26 @@ module.exports = {
         }
 
         const query = args.join(' ');
-        const searchMsg = await message.reply(`🔍 Searching...`);
+        const searchMsg = await message.reply(`🔍 Searching for best match...`);
 
         try {
+            const isSpotify = query.includes('spotify.com') || query.includes('spotify:');
+            const isSoundCloud = query.includes('soundcloud.com');
+            
+            const searchEngine = isSpotify ? 'spotify' : 
+                                isSoundCloud ? 'soundcloud' : 
+                                'soundcloud';
+
             const searchResult = await client.player.search(query, {
                 requestedBy: message.author,
-                searchEngine: query.includes('spotify') ? 'spotify' : 
-                              query.includes('soundcloud') ? 'soundcloud' : 
-                              'youtube'
+                searchEngine: searchEngine
             });
 
             if (!searchResult || !searchResult.hasTracks()) {
                 return searchMsg.edit('❌ No results found! Try a different search.');
             }
+
+            const track = searchResult.tracks[0];
 
             await client.player.play(channel, searchResult, {
                 nodeOptions: {
@@ -35,7 +42,7 @@ module.exports = {
                         requestedBy: message.author
                     },
                     selfDeaf: true,
-                    volume: 50,
+                    volume: 70,
                     leaveOnEmpty: true,
                     leaveOnEmptyCooldown: 120000,
                     leaveOnEnd: false,
@@ -43,11 +50,11 @@ module.exports = {
                 }
             });
 
-            await searchMsg.edit('✅ Added to queue!');
+            await searchMsg.edit(`✅ **${track.title}** by ${track.author}\n🎵 Playing best quality audio`);
 
         } catch (error) {
             console.error('Play error:', error);
-            await searchMsg.edit(`❌ Error: ${error.message || 'Could not play!'}\nTry a different song or link.`);
+            await searchMsg.edit(`❌ Could not play: ${error.message || 'Unknown error'}\nTry a different song.`);
         }
     }
 };

@@ -1,7 +1,6 @@
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { Player } = require('discord-player');
 const { DefaultExtractors } = require('@discord-player/extractor');
-const { YoutubeiExtractor } = require('discord-player-youtubei');
 const fs = require('fs');
 const path = require('path');
 const config = require('./settings/config');
@@ -19,14 +18,15 @@ const client = new Client({
 const player = new Player(client, {
     ytdlOptions: {
         quality: 'highestaudio',
-        highWaterMark: 1 << 25
+        highWaterMark: 1 << 25,
+        filter: 'audioonly',
+        dlChunkSize: 0
     }
 });
 
 (async () => {
     await player.extractors.loadMulti(DefaultExtractors);
-    player.extractors.register(YoutubeiExtractor, {});
-    console.log('✅ All extractors loaded (YouTube, Spotify, SoundCloud)');
+    console.log('✅ Extractors loaded successfully');
 })();
 
 client.commands = new Collection();
