@@ -40,6 +40,60 @@ for (const file of commandFiles) {
     console.log(`✅ Loaded command: ${command.name}`);
 }
 
+const inactivityTimers = new Map();
+
+player.events.on('playerStart', (queue, track) => {
+    if (inactivityTimers.has(queue.guild.id)) {
+        clearTimeout(inactivityTimers.get(queue.guild.id));
+        inactivityTimers.delete(queue.guild.id);
+    }
+    queue.metadata.channel.send(`🎵 Now playing: **${track.title}** by **${track.author}**`);
+});
+
+player.events.on('playerFinish', (queue) => {
+    if (queue.tracks.size === 0) {
+        const timer = setTimeout(() => {
+            if (queue && queue.deleted === false) {
+                queue.delete();
+            }
+            inactivityTimers.delete(queue.guild.id);
+        }, config.inactivityTimeout);
+        inactivityTimers.set(queue.guild.id, timer);
+    }
+});
+
+player.events.on('emptyQueue', (queue) => {
+    const timer = setTimeout(() => {
+        if (queue && queue.deleted === false) {
+            queue.delete();
+        }
+        inactivityTimers.delete(queue.guild.id);
+    }, config.inactivityTimeout);
+    inactivityTimers.set(queue.guild.id, timer);
+});
+
+player.events.on('emptyChannel', (queue) => {
+    const timer = setTimeout(() => {
+        if (queue && queue.deleted === false) {
+            queue.delete();
+        }
+        inactivityTimers.delete(queue.guild.id);
+    }, config.inactivityTimeout);
+    inactivityTimers.set(queue.guild.id, timer);
+});
+
+player.events.on('disconnect', (queue) => {
+    if (inactivityTimers.has(queue.guild.id)) {
+        clearTimeout(inactivityTimers.get(queue.guild.id));
+        inactivityTimers.delete(queue.guild.id);
+    }
+});
+
+player.events.on('playerError', (queue, error) => {
+    console.error(`Player error: ${error.message}`);
+    queue.metadata.channel.send('❌ There was an error playing this track!');
+});
+
 client.once('ready', () => {
     console.log(`🤖 Bot is online as ${client.user.tag}`);
     client.user.setActivity('!play for music', { type: 'LISTENING' });

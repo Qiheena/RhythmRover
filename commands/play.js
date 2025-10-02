@@ -1,25 +1,3 @@
-const { useQueue } = require('discord-player');
-
-const inactivityTimers = new Map();
-
-function clearInactivityTimer(guildId) {
-    if (inactivityTimers.has(guildId)) {
-        clearTimeout(inactivityTimers.get(guildId));
-        inactivityTimers.delete(guildId);
-    }
-}
-
-function setInactivityTimer(guildId, queue, timeout) {
-    clearInactivityTimer(guildId);
-    const timer = setTimeout(() => {
-        if (queue && queue.connection) {
-            queue.delete();
-            inactivityTimers.delete(guildId);
-        }
-    }, timeout);
-    inactivityTimers.set(guildId, timer);
-}
-
 module.exports = {
     name: 'play',
     aliases: ['p'],
@@ -39,7 +17,7 @@ module.exports = {
         try {
             await message.reply(`🔍 Searching for: **${query}**`);
 
-            const { track } = await client.player.play(channel, query, {
+            await client.player.play(channel, query, {
                 nodeOptions: {
                     metadata: {
                         channel: message.channel,
@@ -54,34 +32,6 @@ module.exports = {
                     leaveOnStop: false
                 }
             });
-
-            const queue = useQueue(message.guild.id);
-            
-            clearInactivityTimer(message.guild.id);
-
-            queue.node.on('playerStart', () => {
-                clearInactivityTimer(message.guild.id);
-            });
-
-            queue.node.on('playerFinish', () => {
-                if (queue.tracks.size === 0) {
-                    setInactivityTimer(message.guild.id, queue, client.config.inactivityTimeout);
-                }
-            });
-
-            queue.node.on('emptyQueue', () => {
-                setInactivityTimer(message.guild.id, queue, client.config.inactivityTimeout);
-            });
-
-            queue.node.on('emptyChannel', () => {
-                setInactivityTimer(message.guild.id, queue, client.config.inactivityTimeout);
-            });
-
-            queue.node.on('disconnect', () => {
-                clearInactivityTimer(message.guild.id);
-            });
-
-            await message.channel.send(`🎵 Now playing: **${track.title}** by **${track.author}**`);
 
         } catch (error) {
             console.error('Play command error:', error);
