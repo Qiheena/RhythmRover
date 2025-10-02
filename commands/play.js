@@ -5,19 +5,29 @@ module.exports = {
     async execute(message, args, client) {
         const channel = message.member?.voice?.channel;
         if (!channel) {
-            return message.reply('❌ You need to be in a voice channel to play music!');
+            return message.reply('❌ You need to be in a voice channel!');
         }
 
         if (!args.length) {
-            return message.reply('❌ Please provide a song name or Spotify link!');
+            return message.reply('❌ Please provide a song name or link!');
         }
 
         const query = args.join(' ');
+        const searchMsg = await message.reply(`🔍 Searching...`);
 
         try {
-            await message.reply(`🔍 Searching for: **${query}**`);
+            const searchResult = await client.player.search(query, {
+                requestedBy: message.author,
+                searchEngine: query.includes('spotify') ? 'spotify' : 
+                              query.includes('soundcloud') ? 'soundcloud' : 
+                              'youtube'
+            });
 
-            await client.player.play(channel, query, {
+            if (!searchResult || !searchResult.hasTracks()) {
+                return searchMsg.edit('❌ No results found! Try a different search.');
+            }
+
+            await client.player.play(channel, searchResult, {
                 nodeOptions: {
                     metadata: {
                         channel: message.channel,
@@ -33,9 +43,11 @@ module.exports = {
                 }
             });
 
+            await searchMsg.edit('✅ Added to queue!');
+
         } catch (error) {
-            console.error('Play command error:', error);
-            await message.reply(`❌ Error: ${error.message || 'Could not play the song!'}`);
+            console.error('Play error:', error);
+            await searchMsg.edit(`❌ Error: ${error.message || 'Could not play!'}\nTry a different song or link.`);
         }
     }
 };
