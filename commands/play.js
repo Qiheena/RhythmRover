@@ -46,7 +46,7 @@ async function playNext(guildId, client) {
 module.exports = {
     name: 'play',
     aliases: ['p'],
-    description: 'Play a song from YouTube or SoundCloud, or search by song name',
+    description: 'Play a song from Spotify, SoundCloud, or by searching',
     async execute(message, args, client) {
         const voiceChannel = message.member?.voice?.channel;
         if (!voiceChannel) {
@@ -63,14 +63,19 @@ module.exports = {
         try {
             let songInfo;
             
-            if (play.yt_validate(query) === 'video') {
-                songInfo = await play.video_info(query);
-            } else if (play.sp_validate(query)) {
-                return searchMsg.edit('❌ Spotify links are not supported!\nPlease use:\n• YouTube links\n• Song names (e.g., "Bohemian Rhapsody Queen")\n• SoundCloud links');
+            if (play.sp_validate(query)) {
+                const spotifyData = await play.spotify(query);
+                if (spotifyData.type === 'track') {
+                    const searchQuery = `${spotifyData.name} ${spotifyData.artists.map(a => a.name).join(' ')}`;
+                    const searchResults = await play.search(searchQuery, { limit: 1, source: { youtube: 'video' } });
+                    if (searchResults.length > 0) {
+                        songInfo = await play.video_info(searchResults[0].url);
+                    }
+                }
             } else if (play.so_validate(query)) {
                 songInfo = await play.soundcloud(query);
             } else {
-                const searchResults = await play.search(query, { limit: 1 });
+                const searchResults = await play.search(query, { limit: 1, source: { youtube: 'video' } });
                 if (searchResults.length > 0) {
                     songInfo = await play.video_info(searchResults[0].url);
                 }
