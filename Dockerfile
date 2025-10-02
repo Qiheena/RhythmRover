@@ -1,39 +1,36 @@
-# Use official Node LTS
+# Base Node 20 LTS
 FROM node:20-slim
 
-# Set working dir
+# Set working directory
 WORKDIR /usr/src/app
 
-# Use noninteractive for apt
+# Set env vars for noninteractive installs
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_ENV=production
 
-# Install system deps: curl, ca-certificates, ffmpeg (yt-dlp needs ffmpeg for some formats)
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    python3 \
+# Install system dependencies: ffmpeg, curl, python3 (yt-dlp may require)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    curl \
+    python3 \
+    ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy package manifest(s) and install deps
+# Copy package.json (and package-lock.json if exists)
 COPY package.json package-lock.json* ./
-# For dev builds you can replace `--only=production` with full install
-RUN npm ci --only=production
 
-# Copy rest of the app
+# Install dependencies (omit dev, lockfile-free)
+RUN npm install --omit=dev
+
+# Copy the rest of the bot
 COPY . .
 
-# Create bin folder and download yt-dlp binary (latest release)
+# Download latest yt-dlp binary into ./bin/
 RUN mkdir -p ./bin \
   && curl -L -o ./bin/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp" \
   && chmod +x ./bin/yt-dlp
 
-# Ensure node_modules/.bin/ffmpeg-static can be used (optional)
-# If you prefer system ffmpeg, ffmpeg-static isn't necessary. Keeping both is safe.
-
-# Expose the port your server listens on (server.js uses process.env.PORT || 3000)
+# Expose port for express server (used for Render health checks)
 EXPOSE 3000
 
 # Default command
