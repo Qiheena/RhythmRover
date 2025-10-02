@@ -7,13 +7,15 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     ffmpeg \
     wget \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create symbolic link for python command
 RUN ln -s /usr/bin/python3 /usr/bin/python
 
-# Install latest yt-dlp using pip
-RUN pip3 install -U yt-dlp
+# Install yt-dlp using the official method (more reliable than pip)
+RUN wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O /usr/local/bin/yt-dlp
+RUN chmod a+rx /usr/local/bin/yt-dlp
 
 # Optional: update npm to latest for better dependency resolution
 RUN npm install -g npm@11.6.1
