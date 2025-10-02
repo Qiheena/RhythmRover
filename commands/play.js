@@ -1,10 +1,55 @@
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
+const play = require('play-dl');
+
+async function playNext(guildId, client) {
+    const serverQueue = client.queues.get(guildId);
+    if (!serverQueue || serverQueue.songs.length === 0) {
+        if (client.inactivityTimers.has(guildId)) {
+            clearTimeout(client.inactivityTimers.get(guildId));
+        }
+        const timer = setTimeout(() => {
+            if (serverQueue && serverQueue.connection) {
+                serverQueue.connection.destroy();
+                client.queues.delete(guildId);
+            }
+        }, client.config.inactivityTimeout);
+        client.inactivityTimers.set(guildId, timer);
+        return;
+    }
+
+    const song = serverQueue.songs[0];
+
+    try {
+        const stream = await play.stream(song.url);
+        const resource = createAudioResource(stream.stream, {
+            inputType: stream.type,
+            inlineVolume: true
+        });
+        
+        resource.volume.setVolume(0.7);
+        
+        serverQueue.player.play(resource);
+        serverQueue.textChannel.send(`🎵 Now playing: **${song.title}**`);
+        
+        if (client.inactivityTimers.has(guildId)) {
+            clearTimeout(client.inactivityTimers.get(guildId));
+            client.inactivityTimers.delete(guildId);
+        }
+    } catch (error) {
+        console.error('Playback error:', error);
+        serverQueue.textChannel.send('❌ Error playing this song, skipping...');
+        serverQueue.songs.shift();
+        playNext(guildId, client);
+    }
+}
+
 module.exports = {
     name: 'play',
     aliases: ['p'],
-    description: 'Play a song from Spotify or search by name',
+    description: 'Play a song from Spotify, YouTube, or SoundCloud',
     async execute(message, args, client) {
-        const channel = message.member?.voice?.channel;
-        if (!channel) {
+        const voiceChannel = message.member?.voice?.channel;
+        if (!voiceChannel) {
             return message.reply('❌ You need to be in a voice channel!');
         }
 
@@ -16,45 +61,86 @@ module.exports = {
         const searchMsg = await message.reply(`🔍 Searching for best match...`);
 
         try {
-            const isSpotify = query.includes('spotify.com') || query.includes('spotify:');
-            const isSoundCloud = query.includes('soundcloud.com');
+            let songInfo;
             
-            const searchEngine = isSpotify ? 'spotify' : 
-                                isSoundCloud ? 'soundcloud' : 
-                                'soundcloud';
+            if (play.yt_validate(query) === 'video') {
+                songInfo = await play.video_info(query);
+            } else if (play.sp_validate(query)) {
+                const spotifyData = await play.spotify(query);
+                if (spotifyData.type === 'track') {
+                    const searchResults = await play.search(`${spotifyData.name} ${spotifyData.artists[0].name}`, { limit: 1 });
+                    if (searchResults.length > 0) {
+                        songInfo = await play.video_info(searchResults[0].url);
+                    }
+                }
+            } else if (play.so_validate(query)) {
+                songInfo = await play.soundcloud(query);
+            } else {
+                const searchResults = await play.search(query, { limit: 1 });
+                if (searchResults.length > 0) {
+                    songInfo = await play.video_info(searchResults[0].url);
+                }
+            }
 
-            const searchResult = await client.player.search(query, {
-                requestedBy: message.author,
-                searchEngine: searchEngine
-            });
-
-            if (!searchResult || !searchResult.hasTracks()) {
+            if (!songInfo) {
                 return searchMsg.edit('❌ No results found! Try a different search.');
             }
 
-            const track = searchResult.tracks[0];
+            const song = {
+                title: songInfo.video_details?.title || 'Unknown',
+                url: songInfo.video_details?.url || query
+            };
 
-            await client.player.play(channel, searchResult, {
-                nodeOptions: {
-                    metadata: {
-                        channel: message.channel,
-                        client: message.guild.members.me,
-                        requestedBy: message.author
-                    },
-                    selfDeaf: true,
-                    volume: 70,
-                    leaveOnEmpty: true,
-                    leaveOnEmptyCooldown: 120000,
-                    leaveOnEnd: false,
-                    leaveOnStop: false
-                }
-            });
+            let serverQueue = client.queues.get(message.guild.id);
 
-            await searchMsg.edit(`✅ **${track.title}** by ${track.author}\n🎵 Playing best quality audio`);
+            if (!serverQueue) {
+                const connection = joinVoiceChannel({
+                    channelId: voiceChannel.id,
+                    guildId: message.guild.id,
+                    adapterCreator: message.guild.voiceAdapterCreator,
+                    selfDeaf: true
+                });
+
+                const player = createAudioPlayer();
+
+                player.on(AudioPlayerStatus.Idle, () => {
+                    const queue = client.queues.get(message.guild.id);
+                    if (queue) {
+                        queue.songs.shift();
+                        playNext(message.guild.id, client);
+                    }
+                });
+
+                player.on('error', error => {
+                    console.error('Player error:', error);
+                    const queue = client.queues.get(message.guild.id);
+                    if (queue) {
+                        queue.songs.shift();
+                        playNext(message.guild.id, client);
+                    }
+                });
+
+                connection.subscribe(player);
+
+                serverQueue = {
+                    textChannel: message.channel,
+                    voiceChannel: voiceChannel,
+                    connection: connection,
+                    player: player,
+                    songs: [song]
+                };
+
+                client.queues.set(message.guild.id, serverQueue);
+                await searchMsg.edit(`✅ **${song.title}**\n🎵 Playing best quality audio`);
+                playNext(message.guild.id, client);
+            } else {
+                serverQueue.songs.push(song);
+                await searchMsg.edit(`✅ Added to queue: **${song.title}**`);
+            }
 
         } catch (error) {
             console.error('Play error:', error);
-            await searchMsg.edit(`❌ Could not play: ${error.message || 'Unknown error'}\nTry a different song.`);
+            await searchMsg.edit(`❌ Error: ${error.message || 'Could not play!'}\nTry a different song.`);
         }
     }
 };

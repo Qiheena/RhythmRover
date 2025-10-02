@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
-const { Player } = require('discord-player');
-const { DefaultExtractors } = require('@discord-player/extractor');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus } = require('@discordjs/voice');
+const play = require('play-dl');
 const fs = require('fs');
 const path = require('path');
 const config = require('./settings/config');
@@ -15,23 +15,10 @@ const client = new Client({
     ]
 });
 
-const player = new Player(client, {
-    ytdlOptions: {
-        quality: 'highestaudio',
-        highWaterMark: 1 << 25,
-        filter: 'audioonly',
-        dlChunkSize: 0
-    }
-});
-
-(async () => {
-    await player.extractors.loadMulti(DefaultExtractors);
-    console.log('✅ Extractors loaded successfully');
-})();
-
 client.commands = new Collection();
-client.player = player;
 client.config = config;
+client.queues = new Map();
+client.inactivityTimers = new Map();
 
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
@@ -43,68 +30,9 @@ for (const file of commandFiles) {
     console.log(`✅ Loaded command: ${command.name}`);
 }
 
-const inactivityTimers = new Map();
-
-player.events.on('playerStart', (queue, track) => {
-    if (inactivityTimers.has(queue.guild.id)) {
-        clearTimeout(inactivityTimers.get(queue.guild.id));
-        inactivityTimers.delete(queue.guild.id);
-    }
-    queue.metadata.channel.send(`🎵 Now playing: **${track.title}** by **${track.author}**`);
-});
-
-player.events.on('playerFinish', (queue) => {
-    if (queue.tracks.size === 0) {
-        const timer = setTimeout(() => {
-            if (queue && queue.deleted === false) {
-                queue.delete();
-            }
-            inactivityTimers.delete(queue.guild.id);
-        }, config.inactivityTimeout);
-        inactivityTimers.set(queue.guild.id, timer);
-    }
-});
-
-player.events.on('emptyQueue', (queue) => {
-    const timer = setTimeout(() => {
-        if (queue && queue.deleted === false) {
-            queue.delete();
-        }
-        inactivityTimers.delete(queue.guild.id);
-    }, config.inactivityTimeout);
-    inactivityTimers.set(queue.guild.id, timer);
-});
-
-player.events.on('emptyChannel', (queue) => {
-    const timer = setTimeout(() => {
-        if (queue && queue.deleted === false) {
-            queue.delete();
-        }
-        inactivityTimers.delete(queue.guild.id);
-    }, config.inactivityTimeout);
-    inactivityTimers.set(queue.guild.id, timer);
-});
-
-player.events.on('disconnect', (queue) => {
-    if (inactivityTimers.has(queue.guild.id)) {
-        clearTimeout(inactivityTimers.get(queue.guild.id));
-        inactivityTimers.delete(queue.guild.id);
-    }
-});
-
-player.events.on('playerError', (queue, error) => {
-    console.error(`Player error: ${error.message}`);
-    queue.metadata.channel.send(`❌ Error: ${error.message}\nTrying to skip...`);
-    if (queue.tracks.size > 0) {
-        queue.node.skip();
-    } else {
-        queue.delete();
-    }
-});
-
 client.once('ready', () => {
     console.log(`🤖 Bot is online as ${client.user.tag}`);
-    client.user.setActivity('!play for music', { type: 'LISTENING' });
+    client.user.setActivity('!play for music', { type: 3 });
 });
 
 client.on('messageCreate', async message => {
@@ -123,7 +51,7 @@ client.on('messageCreate', async message => {
         await command.execute(message, args, client);
     } catch (error) {
         console.error(`Error executing command ${commandName}:`, error);
-        message.reply('There was an error executing that command!');
+        message.reply('❌ There was an error!');
     }
 });
 
