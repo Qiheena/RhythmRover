@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { Player } = require('discord-player');
+const { DefaultExtractors } = require('@discord-player/extractor');
 const fs = require('fs');
 const path = require('path');
 const config = require('./settings/config');
@@ -21,7 +22,9 @@ const player = new Player(client, {
     }
 });
 
-player.extractors.loadDefault();
+(async () => {
+    await player.extractors.loadMulti(DefaultExtractors);
+})();
 
 client.commands = new Collection();
 client.player = player;

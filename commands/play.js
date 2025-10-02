@@ -2,6 +2,24 @@ const { useQueue } = require('discord-player');
 
 const inactivityTimers = new Map();
 
+function clearInactivityTimer(guildId) {
+    if (inactivityTimers.has(guildId)) {
+        clearTimeout(inactivityTimers.get(guildId));
+        inactivityTimers.delete(guildId);
+    }
+}
+
+function setInactivityTimer(guildId, queue, timeout) {
+    clearInactivityTimer(guildId);
+    const timer = setTimeout(() => {
+        if (queue && queue.connection) {
+            queue.delete();
+            inactivityTimers.delete(guildId);
+        }
+    }, timeout);
+    inactivityTimers.set(guildId, timer);
+}
+
 module.exports = {
     name: 'play',
     aliases: ['p'],
@@ -26,7 +44,7 @@ module.exports = {
                     metadata: {
                         channel: message.channel,
                         client: message.guild.members.me,
-                        requestedBy: message.user
+                        requestedBy: message.author
                     },
                     selfDeaf: true,
                     volume: 50,
@@ -39,33 +57,28 @@ module.exports = {
 
             const queue = useQueue(message.guild.id);
             
-            if (inactivityTimers.has(message.guild.id)) {
-                clearTimeout(inactivityTimers.get(message.guild.id));
-                inactivityTimers.delete(message.guild.id);
-            }
+            clearInactivityTimer(message.guild.id);
 
             queue.node.on('playerStart', () => {
-                if (inactivityTimers.has(message.guild.id)) {
-                    clearTimeout(inactivityTimers.get(message.guild.id));
+                clearInactivityTimer(message.guild.id);
+            });
+
+            queue.node.on('playerFinish', () => {
+                if (queue.tracks.size === 0) {
+                    setInactivityTimer(message.guild.id, queue, client.config.inactivityTimeout);
                 }
+            });
+
+            queue.node.on('emptyQueue', () => {
+                setInactivityTimer(message.guild.id, queue, client.config.inactivityTimeout);
             });
 
             queue.node.on('emptyChannel', () => {
-                const timer = setTimeout(() => {
-                    if (queue && queue.connection) {
-                        queue.delete();
-                        inactivityTimers.delete(message.guild.id);
-                    }
-                }, client.config.inactivityTimeout);
-                
-                inactivityTimers.set(message.guild.id, timer);
+                setInactivityTimer(message.guild.id, queue, client.config.inactivityTimeout);
             });
 
             queue.node.on('disconnect', () => {
-                if (inactivityTimers.has(message.guild.id)) {
-                    clearTimeout(inactivityTimers.get(message.guild.id));
-                    inactivityTimers.delete(message.guild.id);
-                }
+                clearInactivityTimer(message.guild.id);
             });
 
             await message.channel.send(`🎵 Now playing: **${track.title}** by **${track.author}**`);
